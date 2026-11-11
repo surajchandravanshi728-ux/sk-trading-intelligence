@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SK Trading Intelligence</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080d18;color:#e8edf7;font-family:Arial,sans-serif}
+header{padding:22px 5%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #202b40}
+.logo{font-size:23px;font-weight:bold;color:#f5b942}
+.logo span{color:white}
+.status{color:#55d99a;font-size:12px}
+main{max-width:1250px;margin:auto;padding:28px 20px}
+h1{font-size:29px;margin-bottom:6px}
+.sub{color:#8794aa;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:25px 0}
+.card{background:#111a2a;border:1px solid #253149;border-radius:12px;padding:19px}
+.card small{color:#94a3b8}
+.value{font-size:25px;font-weight:bold;margin-top:12px}
+.green{color:#45d69b}.red{color:#ff6b78}.gold{color:#f5b942}
+.panel{background:#111a2a;border:1px solid #253149;border-radius:12px;padding:20px;margin-bottom:18px}
+.panel h2{font-size:17px;margin-top:0}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}
+button{background:#1b2940;color:#dce6f5;border:1px solid #34445e;padding:9px 15px;border-radius:7px;cursor:pointer}
+button.active{background:#e6a92e;color:#101522;border-color:#e6a92e}
+canvas{width:100%;height:280px;display:block}
+.analysis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.note{color:#93a2b8;font-size:13px;line-height:1.6}
+footer{text-align:center;padding:25px;color:#65748d;font-size:12px}
+@media(max-width:750px){.grid{grid-template-columns:repeat(2,1fr)}.analysis{grid-template-columns:1fr}header{padding:18px}.value{font-size:20px}}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">SK <span>TRADING INTELLIGENCE</span></div>
+ <div class="status" id="connection">● Connecting...</div>
+</header>
+<main>
+ <h1>Bitcoin Market Dashboard</h1>
+ <div class="sub">Live BTC/USDT market overview · Educational analysis</div>
+
+ <section class="grid">
+  <div class="card"><small>BTC PRICE</small><div class="value gold" id="price">Loading...</div></div>
+  <div class="card"><small>24H CHANGE</small><div class="value" id="change">--</div></div>
+  <div class="card"><small>24H HIGH</small><div class="value" id="high">--</div></div>
+  <div class="card"><small>24H LOW</small><div class="value" id="low">--</div></div>
+ </section>
+
+ <section class="panel">
+  <h2>BTC Price Chart</h2>
+  <div class="toolbar">
+   <button class="active" data-tf="1h">1H</button>
+   <button data-tf="4h">4H</button>
+   <button data-tf="1d">1D</button>
+  </div>
+  <canvas id="chart"></canvas>
+  <div class="note" id="chartStatus">Loading market candles...</div>
+ </section>
+
+ <section class="analysis">
+  <div class="panel">
+   <h2 class="gold">Liquidity</h2>
+   <p class="note">Next module: identify important swing highs, swing lows and liquidity areas.</p>
+  </div>
+  <div class="panel">
+   <h2 class="gold">Open Interest</h2>
+   <p class="note">Next module: connect a reliable derivatives data source for OI analysis.</p>
+  </div>
+  <div class="panel">
+   <h2 class="gold">Funding Rate</h2>
+   <p class="note">Next module: monitor funding and market positioning.</p>
+  </div>
+ </section>
+
+ <section class="panel">
+  <h2>AI Market Analysis</h2>
+  <p class="note" id="aiStatus">AI analysis is not connected yet. The secure AI backend will be added in the next development stage.</p>
+  <p class="note">This dashboard displays market information for learning. It does not provide guaranteed predictions or automatic trade execution.</p>
+ </section>
+</main>
+<footer>SK TRADING INTELLIGENCE · Built for Suraj · Version 1.0</footer>
+
+<script>
+const priceEl=document.getElementById("price");
+const changeEl=document.getElementById("change");
+const highEl=document.getElementById("high");
+const lowEl=document.getElementById("low");
+const connection=document.getElementById("connection");
+const canvas=document.getElementById("chart");
+const ctx=canvas.getContext("2d");
+let candles=[];
+let timeframe="1h";
+
+function money(n){
+ return "$"+Number(n).toLocaleString("en-US",{maximumFractionDigits:2});
+}
+
+function updateTicker(d){
+ priceEl.textContent=money(d.c);
+ changeEl.textContent=Number(d.P).toFixed(2)+"%";
+ changeEl.className="value "+(Number(d.P)>=0?"green":"red");
+ highEl.textContent=money(d.h);
+ lowEl.textContent=money(d.l);
+}
+
+function connectLive(){
+ const ws=new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@ticker");
+ ws.onopen=()=>connection.textContent="● LIVE MARKET DATA";
+ ws.onmessage=e=>updateTicker(JSON.parse(e.data));
+ ws.onerror=()=>connection.textContent="● Live connection unavailable";
+ ws.onclose=()=>{
+  connection.textContent="● Reconnecting...";
+  setTimeout(connectLive,5000);
+ };
+}
+
+async function loadChart(){
+ document.getElementById("chartStatus").textContent="Loading candles...";
+ try{
+  const url=`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${timeframe}&limit=60`;
+  const response=await fetch(url);
+  if(!response.ok)throw new Error("Market data unavailable");
+  const data=await response.json();
+  candles=data.map(x=>({open:+x[1],close:+x[4]}));
+  drawChart();
+  document.getElementById("chartStatus").textContent="Source: Binance public market data · "+timeframe;
+ }catch(error){
+  document.getElementById("chartStatus").textContent="Chart unavailable. Your network or data provider may be blocking this request.";
+ }
+}
+
+function drawChart(){
+ const w=canvas.clientWidth;
+ const h=280;
+ const ratio=window.devicePixelRatio||1;
+ canvas.width=w*ratio;
+ canvas.height=h*ratio;
+ ctx.setTransform(ratio,0,0,ratio,0,0);
+ ctx.clearRect(0,0,w,h);
+ if(!candles.length)return;
+ const values=candles.map(c=>c.close);
+ const min=Math.min(...values);
+ const max=Math.max(...values);
+ const range=max-min||1;
+ ctx.strokeStyle="#26344b";
+ ctx.lineWidth=1;
+ for(let i=0;i<5;i++){
+  const y=15+i*(h-35)/4;
+  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+ }
+ ctx.beginPath();
+ values.forEach((v,i)=>{
+  const x=i*w/(values.length-1);
+  const y=15+(max-v)/range*(h-35);
+  if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+ });
+ ctx.strokeStyle="#f5b942";
+ ctx.lineWidth=2;
+ ctx.stroke();
+}
+
+document.querySelectorAll("[data-tf]").forEach(btn=>{
+ btn.addEventListener("click",()=>{
+  document.querySelectorAll("[data-tf]").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  timeframe=btn.dataset.tf;
+  loadChart();
+ });
+});
+
+window.addEventListener("resize",drawChart);
+connectLive();
+loadChart();
+</script>
+</body>
+</html>
